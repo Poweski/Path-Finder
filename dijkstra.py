@@ -25,8 +25,10 @@ def dijkstra(graph, start_stop, end_stop, start_time):
     travel_times[start_stop] = 0
     current_times = {vertex: float('inf') for vertex in graph}
     current_times[start_stop] = time
-    i = 0
+    previous = {vertex: None for vertex in graph}
+    travel_details = {vertex: None for vertex in graph}  # Słownik szczegółów podróży
     
+    i = 0
     pq = [(travel_times[start_stop], current_times[start_stop], start_stop)] 
     
     while pq:
@@ -36,35 +38,49 @@ def dijkstra(graph, start_stop, end_stop, start_time):
         current_travel_time, current_time, current_vertex = heapq.heappop(pq)
         
         if current_vertex == end_stop:
-            return seconds_to_time(current_travel_time)
+            # Budowanie ścieżki
+            path = []
+            while current_vertex is not None:
+                path.append(current_vertex)
+                current_vertex = previous[current_vertex]
+            path.reverse()  # Odwróć ścieżkę, bo zaczęliśmy od końca
+            # Odtwarzanie szczegółów podróży
+            travel_path = []
+            for vertex in path:
+                travel_path.append(travel_details[vertex])
+            return (seconds_to_time(current_travel_time), seconds_to_time(current_time), travel_path)
         
-        for neighbor, dep_time, arr_time, _, _ in graph.get(current_vertex, []):
+        for neighbor, dep_time, arr_time, company, line in graph.get(current_vertex, []):
             dep_seconds = time_to_seconds(dep_time)
             arr_seconds = time_to_seconds(arr_time)
 
             if dep_seconds < arr_seconds:
                 if current_time < dep_seconds:
                     if current_time < arr_seconds:
-                        travel_time = DAY + arr_seconds - current_time #1
+                        travel_time = DAY + arr_seconds - current_time  #1
                     else:
-                        continue #4
+                        continue  #4
                 else:
-                    travel_time = DAY + arr_seconds - current_time #1
+                    travel_time = DAY + arr_seconds - current_time  #1
             else:
                 if current_time < dep_seconds:
                     if current_time < arr_seconds:
-                        travel_time = arr_seconds - current_time #3
+                        travel_time = arr_seconds - current_time  #3
                     else:
-                        travel_time = DAY + arr_seconds - current_time #1
+                        travel_time = DAY + arr_seconds - current_time  #1
                 else:
-                    travel_time = 2 * DAY + arr_seconds - current_time #2
+                    travel_time = 2 * DAY + arr_seconds - current_time  #2
             
-            if current_travel_time + travel_time < travel_times[neighbor]:
-                travel_times[neighbor] = current_travel_time + travel_time
-                current_times[neighbor] += travel_time
-                if current_times[neighbor] > DAY:
-                    current_times[neighbor] -= DAY
-                heapq.heappush(pq, (travel_times[neighbor], current_times[neighbor], neighbor))
+            new_travel_time = current_travel_time + travel_time
+            if new_travel_time < travel_times[neighbor]:
+                travel_times[neighbor] = new_travel_time
+                new_time = current_time + travel_time
+                if new_time > DAY:
+                    new_time -= DAY
+                current_times[neighbor] = new_time
+                previous[neighbor] = current_vertex  # Ustawiamy poprzednika
+                travel_details[neighbor] = (line, dep_time, arr_time, company)  # Przechowujemy szczegóły podróży
+                heapq.heappush(pq, (new_travel_time, new_time, neighbor))
 
         i += 1
 
@@ -95,5 +111,8 @@ if __name__ == "__main__":
         end_vertex = 'Krucza'
         start_time = '12:00:00'
         graph = build_graph(df)
-        shortest_path_time = dijkstra(graph, start_vertex, end_vertex, start_time)
-        print(f"Travel time from {start_vertex} to {end_vertex}: {shortest_path_time}.")
+        travel_time, time, travel_path = dijkstra(graph, start_vertex, end_vertex, start_time)
+        print(f"Travel time from {start_vertex} to {end_vertex}: {travel_time}. Arrival at {time}.")
+        print("Path details:")
+        for line, dep_time, arr_time, company in travel_path:
+            print(f"Company: {company}, Line: {line}, Departure: {dep_time}, Arrival: {arr_time}")
