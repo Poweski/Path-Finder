@@ -2,18 +2,25 @@ import heapq
 import sys
 from utils import *
 from csv_reader import read_csv
+from geopy.distance import distance # type: ignore
 
-def dijkstra(graph, start_stop, end_stop, start_time):
+def haversine(lat1, lon1, lat2, lon2):
+    """Calculates the distance in kilometers between two points on Earth using geopy."""
+    point1 = (lat1, lon1)
+    point2 = (lat2, lon2)
+    return distance(point1, point2).km
+
+def a_star(graph, start_stop, end_stop, start_time, stop_coords):
     time = time_to_seconds(start_time)
     travel_times = {vertex: float('inf') for vertex in graph}
     travel_times[start_stop] = 0
     previous = {vertex: None for vertex in graph}
     used_connections = {}
 
-    pq = [(0, start_stop)]
+    pq = [(0 + haversine(*stop_coords[start_stop], *stop_coords[end_stop]), 0, start_stop)]
 
     while pq:
-        current_travel_time, current_vertex = heapq.heappop(pq)
+        _, current_travel_time, current_vertex = heapq.heappop(pq)
         current_time = (current_travel_time + time) % DAY
 
         if current_vertex == end_stop:
@@ -34,12 +41,13 @@ def dijkstra(graph, start_stop, end_stop, start_time):
         for neighbor, dep_time, arr_time, company, line in graph.get(current_vertex, []):
             travel_time = calculate_travel_time(dep_time, arr_time, current_time)
             new_travel_time = current_travel_time + travel_time
+            heuristic = haversine(*stop_coords[current_vertex], *stop_coords[end_stop])
 
             if new_travel_time < travel_times[neighbor]:
                 travel_times[neighbor] = new_travel_time
                 previous[neighbor] = current_vertex
                 used_connections[(current_vertex, neighbor)] = (current_vertex, neighbor, line, dep_time, arr_time, company)
-                heapq.heappush(pq, (new_travel_time, neighbor))
+                heapq.heappush(pq, (new_travel_time + (heuristic*3000), new_travel_time, neighbor))
 
     return f"No route found from {start_stop} to {end_stop}."
 
@@ -49,9 +57,9 @@ if __name__ == "__main__":
         start_vertex = 'Wyszyńskiego'
         end_vertex = 'PL. GRUNWALDZKI'
         start_time = '12:00:00'
-        graph, _ = build_graph(df)
+        graph, stop_coords = build_graph(df)
         start_time_alg = time.time() 
-        result = dijkstra(graph, start_vertex, end_vertex, start_time)
+        result = a_star(graph, start_vertex, end_vertex, start_time, stop_coords)
         end_time_alg = time.time()
         computation_time = end_time_alg - start_time_alg
         
@@ -63,6 +71,6 @@ if __name__ == "__main__":
             print(f"\nCost function value (travel time in seconds): {time_to_seconds(travel_time)}", file=sys.stderr)
             print(f"Computation time: {computation_time:.6f} seconds", file=sys.stderr)
             print(f"\nTravel time from {start_vertex} to {end_vertex}: {travel_time}. Arrival at {arrival_time}.")
-            
+
             print_travel_summary(travel_path)
             print_path_details(travel_path)
